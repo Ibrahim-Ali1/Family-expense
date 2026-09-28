@@ -168,7 +168,6 @@ const PAYS = ["كاش","بطاقة / مدى","تحويل بنكي"];
 const COLORS = ["#12372F","#E0A526","#B4432F","#4E8F7A","#7A6FB0","#8A9A94"];
 const KEY = "home_expenses_data", PASS_KEY = "home_expenses_pass", CLOUD_BIN_KEY = "home_expenses_bin_id";
 
-// --- تم دمج مفتاحك الخاص X-MASTER-KEY بنجاح ---
 const MASTER_KEY = "$2a$10$5MvFe7lJGFBlwd.fI9qv6OqImszh0ZYiUYmxslpvCfshsorxz9chK";
 
 const $ = id => document.getElementById(id);
@@ -216,7 +215,10 @@ function loadLocal(){
 }
 
 function saveLocal(){
-  try { localStorage.setItem(KEY, JSON.stringify(L)); } catch(e){ toast("تعذر الحفظ المحلي"); }
+  try { 
+    localStorage.setItem(KEY, JSON.stringify(L));
+    autoUploadCloud(); // رفع تلقائي عند حفظ البيانات محلياً
+  } catch(e){ toast("تعذر الحفظ المحلي"); }
 }
 
 function nextNo(){
@@ -346,10 +348,8 @@ $("saveBtn").onclick = () => {
   if(editId){
     const idx = L.expenses.findIndex(x => x._id === editId);
     if(idx >= 0) L.expenses[idx] = { ...L.expenses[idx], ...row };
-    toast("✅ تم تحديث المصروف");
   } else {
     L.expenses.push({ ...row, _id: uid(), no: nextNo() });
-    toast("✅ تم تسجيل المصروف بنجاح");
   }
 
   saveLocal(); resetForm(); refreshMonths(); render();
@@ -362,7 +362,6 @@ $("tbody").onclick = e => {
     if(confirm("هل أنت تأكد من حذف هذا المصروف؟")){
       L.expenses = L.expenses.filter(x => x._id !== delId);
       saveLocal(); refreshMonths(); render();
-      toast("تم الحذف بنجاح");
     }
   }
   if(editTarget){
@@ -386,7 +385,6 @@ $("rAdd").onclick = () => {
   if(!desc || !amt || amt <= 0){ toast("⚠️ أدخل البيان والمبلغ بشكل صحيح"); return; }
   L.recurring.push({ _id: uid(), desc, cat: $("rCat").value, amount: amt, pay: $("rPay").value, day });
   saveLocal(); render(); $("rDesc").value = ""; $("rAmt").value = "";
-  toast("✅ تم إضافة المصروف المتكرر");
 };
 
 $("rBody").onclick = e => {
@@ -434,19 +432,41 @@ $("bkImpBtn").onclick = () => {
     if(obj && Array.isArray(obj.expenses)){
       L.expenses = obj.expenses; L.recurring = obj.recurring || []; L.bud = obj.bud || {};
       saveLocal(); refreshMonths(); render(); $("dlgBackup").classList.remove("open");
-      toast("✅ تم استيراد البيانات بنجاح");
     }
   } catch(err){ toast("❌ نص غير صحيح"); }
 };
 
-// --- المزامنة السحابية المباشرة المربوطة بمفتاحك ---
+// --- المزامنة السحابية المباشرة والمزامنة التلقائية ---
 $("cloudSyncBtn").onclick = () => {
   $("cloudBinId").value = localStorage.getItem(CLOUD_BIN_KEY) || "";
   $("dlgCloud").classList.add("open");
 };
 $("closeCloudBtn").onclick = () => $("dlgCloud").classList.remove("open");
 
-// رفع البيانات
+async function autoUploadCloud(){
+  const binId = localStorage.getItem(CLOUD_BIN_KEY);
+  if(!binId) return; // إذا لم يُربط بعد بـ Bin ID لا يتم الرفع التلقائي
+
+  try {
+    toast("⚡ جاري المزامنة مع السحاب...");
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Master-Key": MASTER_KEY
+      },
+      body: JSON.stringify(L)
+    });
+
+    if(res.ok){
+      toast("✅ تم الحفظ والمزامنة السحابية!");
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// الرفع اليدوي
 $("uploadCloudBtn").onclick = async () => {
   let binId = $("cloudBinId").value.trim();
   toast("جاري رفع البيانات إلى السحاب...");
@@ -476,7 +496,7 @@ $("uploadCloudBtn").onclick = async () => {
       const newBinId = binId || data.metadata.id;
       localStorage.setItem(CLOUD_BIN_KEY, newBinId);
       $("cloudBinId").value = newBinId;
-      toast("✅ تم حفظ البيانات سحابياً بنجاح!");
+      toast("✅ تم حفظ البيانات وتفعيل المزامنة التلقائية!");
     } else {
       throw new Error(data.message || "فشل الرفع");
     }
@@ -505,8 +525,12 @@ $("downloadCloudBtn").onclick = async () => {
       L.expenses = data.record.expenses;
       L.recurring = data.record.recurring || [];
       L.bud = data.record.bud || {};
-      saveLocal(); refreshMonths(); render();
+      
+      // حفظ محلي بدون إعادة الرفع للسحاب لتجنب الدائرة اللانهائية
+      localStorage.setItem(KEY, JSON.stringify(L));
       localStorage.setItem(CLOUD_BIN_KEY, binId);
+      
+      refreshMonths(); render();
       $("dlgCloud").classList.remove("open");
       toast("🎉 تم تحديث بياناتك بنجاح من السحاب!");
     } else {
