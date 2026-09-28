@@ -150,7 +150,7 @@ td.n{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
     <h2>☁️ المزامنة السحابية المباشرة</h2>
     <p class="sub">كود البيانات الموحد (Bin ID):</p>
     
-    <input type="text" id="cloudBinId" placeholder="سيظهر الكود هنا بعد الرفع الأول" style="text-align:center;font-weight:bold;font-size:16px;margin:10px 0">
+    <input type="text" id="cloudBinId" placeholder="سيظهر الكود هنا تلقائياً بعد أول رفع" style="text-align:center;font-weight:bold;font-size:16px;margin:10px 0">
 
     <button id="uploadCloudBtn" class="p" style="margin-top:5px">⬆️ رفع وتحديث البيانات سحابياً</button>
     <button id="downloadCloudBtn" style="background:var(--gold);color:#000;font-weight:bold;width:100%;margin-top:8px">⬇️ جلب البيانات من السحاب</button>
@@ -168,8 +168,8 @@ const PAYS = ["كاش","بطاقة / مدى","تحويل بنكي"];
 const COLORS = ["#12372F","#E0A526","#B4432F","#4E8F7A","#7A6FB0","#8A9A94"];
 const KEY = "home_expenses_data", PASS_KEY = "home_expenses_pass", CLOUD_BIN_KEY = "home_expenses_bin_id";
 
-// --- دمج المفتاح السحابي الموحد مجاناً ودائماً ---
-const MASTER_KEY = "$2a$10$64EaKx9sL9I.f2B2lV5kIe9Yv4zT2k.P4v2O0b1N5I6K3U8A7L9Z1";
+// --- تم دمج مفتاحك الخاص X-MASTER-KEY بنجاح ---
+const MASTER_KEY = "$2a$10$5MvFe7lJGFBlwd.fI9qv6OqImszh0ZYiUYmxslpvCfshsorxz9chK";
 
 const $ = id => document.getElementById(id);
 const fmt = n => Number(n || 0).toLocaleString("ar-SA", {maximumFractionDigits:2});
@@ -439,7 +439,7 @@ $("bkImpBtn").onclick = () => {
   } catch(err){ toast("❌ نص غير صحيح"); }
 };
 
-// --- المزامنة السحابية المدمجة بـ Master Key تلقائي ---
+// --- المزامنة السحابية المباشرة المربوطة بمفتاحك ---
 $("cloudSyncBtn").onclick = () => {
   $("cloudBinId").value = localStorage.getItem(CLOUD_BIN_KEY) || "";
   $("dlgCloud").classList.add("open");
