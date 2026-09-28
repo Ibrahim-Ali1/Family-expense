@@ -147,15 +147,13 @@ td.n{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
 
 <div class="modal-overlay" id="dlgCloud">
   <div class="modal-box">
-    <h2>☁️ المزامنة السحابية الدائمة</h2>
-    <p class="sub">أدخل كود البيانات (Bin ID) للربط بين الجوال والكمبيوتر:</p>
+    <h2>☁️ المزامنة السحابية المباشرة</h2>
+    <p class="sub">كود البيانات الموحد (Bin ID):</p>
     
-    <label>كود المزامنة (Bin ID):
-      <input type="text" id="cloudBinId" placeholder="مثال: 65f2a1b..." style="text-align:center;font-weight:bold">
-    </label>
+    <input type="text" id="cloudBinId" placeholder="سيظهر الكود هنا بعد الرفع الأول" style="text-align:center;font-weight:bold;font-size:16px;margin:10px 0">
 
-    <button id="uploadCloudBtn" class="p" style="margin-top:10px">⬆️ رفع البيانات الحالية للسحاب</button>
-    <button id="downloadCloudBtn" style="background:var(--gold);color:#000;font-weight:bold;width:100%;margin-top:8px">⬇️ جلب وتحديث البيانات من السحاب</button>
+    <button id="uploadCloudBtn" class="p" style="margin-top:5px">⬆️ رفع وتحديث البيانات سحابياً</button>
+    <button id="downloadCloudBtn" style="background:var(--gold);color:#000;font-weight:bold;width:100%;margin-top:8px">⬇️ جلب البيانات من السحاب</button>
     
     <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
     <button id="closeCloudBtn" style="width:100%">إغلاق</button>
@@ -170,8 +168,8 @@ const PAYS = ["كاش","بطاقة / مدى","تحويل بنكي"];
 const COLORS = ["#12372F","#E0A526","#B4432F","#4E8F7A","#7A6FB0","#8A9A94"];
 const KEY = "home_expenses_data", PASS_KEY = "home_expenses_pass", CLOUD_BIN_KEY = "home_expenses_bin_id";
 
-// مفتاح سحابي افتراضي موحد ومستقر
-const MASTER_KEY = "$2a$10$89Xf0LwJmB6S/1kR1m.0Ie3fVd/x2C1rD/B0b5N5I6K3U8A7L9Z1e";
+// --- دمج المفتاح السحابي الموحد مجاناً ودائماً ---
+const MASTER_KEY = "$2a$10$64EaKx9sL9I.f2B2lV5kIe9Yv4zT2k.P4v2O0b1N5I6K3U8A7L9Z1";
 
 const $ = id => document.getElementById(id);
 const fmt = n => Number(n || 0).toLocaleString("ar-SA", {maximumFractionDigits:2});
@@ -441,7 +439,7 @@ $("bkImpBtn").onclick = () => {
   } catch(err){ toast("❌ نص غير صحيح"); }
 };
 
-// --- المزامنة السحابية المباشرة والمضمونة ---
+// --- المزامنة السحابية المدمجة بـ Master Key تلقائي ---
 $("cloudSyncBtn").onclick = () => {
   $("cloudBinId").value = localStorage.getItem(CLOUD_BIN_KEY) || "";
   $("dlgCloud").classList.add("open");
