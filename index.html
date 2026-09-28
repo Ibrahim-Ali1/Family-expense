@@ -13,7 +13,7 @@ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:en
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.6 "IBM Plex Sans Arabic",Tahoma,Arial,sans-serif}
 .wrap{max-width:1040px;margin:0 auto;padding:20px 16px 48px}
-header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-space:between;margin-bottom:18px}
 h1{font-size:24px;margin:0;font-weight:700}
 h2{font-size:16px;margin:0 0 12px;font-weight:700}
 .sub{color:var(--mut);margin:2px 0 0}
@@ -147,12 +147,12 @@ td.n{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
 
 <div class="modal-overlay" id="dlgCloud">
   <div class="modal-box">
-    <h2>☁️ المشاركة السحابية Direct Sync</h2>
-    <p class="sub">1. رفع البيانات الحالية للحصول على كود خاص:</p>
-    <button id="uploadCloudBtn" class="p" style="margin:8px 0">1️⃣ رفع البيانات وتوليد الكود</button>
+    <h2>☁️ المشاركة السحابية المباشرة</h2>
+    <p class="sub">1. اضغط لرفع البيانات واستخراج كود المشاركة:</p>
+    <button id="uploadCloudBtn" class="p" style="margin:8px 0">1️⃣ رفع البيانات وتوليد/تحديث الكود</button>
     
     <div style="margin:12px 0;text-align:center">
-      <label>كود المشاركة:</label>
+      <label>كود المشاركة الخاص بك:</label>
       <input type="text" id="cloudCodeDisplay" readonly placeholder="سيظهر الكود هنا" style="text-align:center;font-weight:bold;font-size:18px;color:var(--acc)">
       <button id="copyCodeBtn" style="margin-top:6px;width:100%;display:none">📋 نسخ الكود</button>
     </div>
@@ -171,7 +171,7 @@ td.n{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
 const CATS = ["طعام ومشتريات","فواتير وخدمات","صيانة ومستلزمات","مصاريف شخصية وأولاد","إيجار وأقساط","أخرى"];
 const PAYS = ["كاش","بطاقة / مدى","تحويل بنكي"];
 const COLORS = ["#12372F","#E0A526","#B4432F","#4E8F7A","#7A6FB0","#8A9A94"];
-const KEY = "home_expenses_data", PASS_KEY = "home_expenses_pass";
+const KEY = "home_expenses_data", PASS_KEY = "home_expenses_pass", CLOUD_KEY = "home_expenses_cloud_id";
 
 const $ = id => document.getElementById(id);
 const fmt = n => Number(n || 0).toLocaleString("ar-SA", {maximumFractionDigits:2});
@@ -453,7 +453,7 @@ $("excelBtn").onclick = () => {
   toast("📊 تم تصدير تقرير Excel بنجاح!");
 };
 
-// --- السحاب المستقر (JSONBin Master Provider) ---
+// --- السحاب المحسّن بدون أخطاء (MyJSON Cloud Engine) ---
 $("backupBtn").onclick = () => {
   $("bkText").value = JSON.stringify(L);
   $("dlgBackup").classList.add("open");
@@ -474,90 +474,79 @@ $("bkImpBtn").onclick = () => {
   } catch(err){ toast("❌ نص غير صحيح"); }
 };
 
-$("cloudSyncBtn").onclick = () => $("dlgCloud").classList.add("open");
+$("cloudSyncBtn").onclick = () => {
+  const savedCode = localStorage.getItem(CLOUD_KEY);
+  if(savedCode){
+    $("cloudCodeDisplay").value = savedCode;
+    $("cloudCodeInput").value = savedCode;
+    $("copyCodeBtn").style.display = "block";
+  }
+  $("dlgCloud").classList.add("open");
+};
 $("closeCloudBtn").onclick = () => $("dlgCloud").classList.remove("open");
 
-// رفع البيانات وسحب كود جديد عبر السحاب المستقر
+// رفع البيانات وسحب كود جديد
 $("uploadCloudBtn").onclick = async () => {
   try {
     toast("جاري الاتصال بالسحاب وتوليد الكود...");
-    const res = await fetch("https://api.jsonbin.io/v3/b", {
+    
+    // محاولة إنشاء السجل في خادم مجاني ومباشر بدون مفاتيح
+    const response = await fetch("https://api.myjson.online/v1/records", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Master-Key": "$2a$10$7R6OqgY5aM5g.R/G8Y9.S.L6aGvTq1d84b2e84",
-        "X-Bin-Private": "false"
-      },
-      body: JSON.stringify(L)
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonData: L })
     });
+
+    const resData = await response.json();
     
-    if(!res.ok) throw new Error("HTTP Status " + res.status);
-    
-    const data = await res.json();
-    if(data && (data.id || (data.metadata && data.metadata.id))){
-      const code = data.id || data.metadata.id;
+    if (resData && (resData.id || resData.recordId)) {
+      const code = resData.id || resData.recordId;
+      localStorage.setItem(CLOUD_KEY, code);
       $("cloudCodeDisplay").value = code;
       $("cloudCodeInput").value = code;
       $("copyCodeBtn").style.display = "block";
-      toast("✅ تم توليد كود المشاركة بنجاح!");
+      toast("✅ تم توليد كود المشاركة السحابية بنجاح!");
     } else {
-      throw new Error("Invalid payload");
+      throw new Error("لم نتمكن من الحصول على معرف الكود");
     }
-  } catch(e){
+  } catch (e) {
     console.error(e);
-    // طريقة احتياطية مجانية في حال تعذر السحاب
-    const backupCode = "TXT-" + btoa(unescape(encodeURIComponent(JSON.stringify(L)))).slice(0, 12);
-    $("cloudCodeDisplay").value = backupCode;
-    $("cloudCodeInput").value = backupCode;
-    $("copyCodeBtn").style.display = "block";
-    toast("💡 تم توليد كود مشاركة نصي سريع!");
+    toast("❌ فشل الاتصال بالسحاب، تأكد من اتصال الإنترنت");
   }
 };
 
 $("copyCodeBtn").onclick = () => {
   navigator.clipboard.writeText($("cloudCodeDisplay").value);
-  toast("📋 تم نسخ الكود! استخدمه في الجهاز الآخر");
+  toast("📋 تم نسخ الكود! أرسله للجوال الآخر");
 };
 
-// جلب البيانات عن طريق الكود
+// جلب البيانات باستخدام الكود
 $("downloadCloudBtn").onclick = async () => {
   const code = $("cloudCodeInput").value.trim();
   if(!code){ toast("⚠️ أدخل كود المشاركة أولاً"); return; }
   
-  toast("جاري سحب البيانات...");
-
-  // إذا كان الكود محلياً احتياطياً
-  if(code.startsWith("TXT-")){
-    toast("❌ الكود النصي القصير مخصص لنفس الجهاز فقط، يرجى إعادة محاولة توليد كود سحابي عند توفر الإنترنت");
-    return;
-  }
-
   try {
-    const res = await fetch(`https://api.jsonbin.io/v3/b/${code}/latest`, {
-      method: "GET",
-      headers: {
-        "X-Master-Key": "$2a$10$7R6OqgY5aM5g.R/G8Y9.S.L6aGvTq1d84b2e84"
-      }
-    });
+    toast("جاري جلب البيانات من السحاب...");
+    const response = await fetch(`https://api.myjson.online/v1/records/${code}`);
     
-    if(!res.ok) throw new Error("Fetch failed");
-    
-    const data = await res.json();
-    const payload = data.record || data;
-    
-    if(payload && Array.isArray(payload.expenses)){
-      L.expenses = payload.expenses;
-      L.recurring = payload.recurring || [];
-      L.bud = payload.bud || {};
+    if (!response.ok) throw new Error("الكود غير صحيح أو منتهي");
+
+    const resData = await response.json();
+    const data = resData.jsonData || resData.data || resData;
+
+    if(data && Array.isArray(data.expenses)){
+      L.expenses = data.expenses;
+      L.recurring = data.recurring || [];
+      L.bud = data.bud || {};
       saveLocal(); refreshMonths(); render();
       $("dlgCloud").classList.remove("open");
-      toast("🎉 تم جلب وتحميل كل البيانات بنجاح!");
+      toast("🎉 تم جلب وتحديث البيانات بنجاح!");
     } else {
       toast("❌ الكود المكتوب لا يحتوي على بيانات مصروفات صحيحة");
     }
   } catch(e){
     console.error(e);
-    toast("❌ فشل جلب البيانات، تأكد من صحة الكود أو اتصال الإنترنت");
+    toast("❌ فشل الجلب: الكود غير صحيح أو لا يوجد اتصال بالإنترنت");
   }
 };
 
