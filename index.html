@@ -485,39 +485,38 @@ $("cloudSyncBtn").onclick = () => {
 };
 $("closeCloudBtn").onclick = () => $("dlgCloud").classList.remove("open");
 
-// رفع البيانات وسحب كود جديد
+// رفع البيانات وتوليد الكود
 $("uploadCloudBtn").onclick = async () => {
   try {
-    toast("جاري الاتصال بالسحاب وتوليد الكود...");
+    toast("جاري رفع البيانات إلى السحاب...");
     
-    // محاولة إنشاء السجل في خادم مجاني ومباشر بدون مفاتيح
-    const response = await fetch("https://api.myjson.online/v1/records", {
+    const response = await fetch("https://jsonblob.com/api/jsonBlob", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonData: L })
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(L)
     });
 
-    const resData = await response.json();
-    
-    if (resData && (resData.id || resData.recordId)) {
-      const code = resData.id || resData.recordId;
+    if (!response.ok) throw new Error("فشل الرفع");
+
+    // استخراج المعرف الفريد من رابط الاستجابة (Location Header)
+    const blobUrl = response.headers.get("Location");
+    if (blobUrl) {
+      const code = blobUrl.split("/").pop();
       localStorage.setItem(CLOUD_KEY, code);
       $("cloudCodeDisplay").value = code;
       $("cloudCodeInput").value = code;
       $("copyCodeBtn").style.display = "block";
-      toast("✅ تم توليد كود المشاركة السحابية بنجاح!");
+      toast("✅ تم رفع البيانات وتوليد الكود بنجاح!");
     } else {
-      throw new Error("لم نتمكن من الحصول على معرف الكود");
+      throw new Error("لم يتم استلام الكود");
     }
   } catch (e) {
     console.error(e);
-    toast("❌ فشل الاتصال بالسحاب، تأكد من اتصال الإنترنت");
+    toast("❌ تعذر الاتصال بالسحاب. تأكد من اتصال الإنترنت أو استخدم خيار النسخ/الاستيراد");
   }
-};
-
-$("copyCodeBtn").onclick = () => {
-  navigator.clipboard.writeText($("cloudCodeDisplay").value);
-  toast("📋 تم نسخ الكود! أرسله للجوال الآخر");
 };
 
 // جلب البيانات باستخدام الكود
@@ -527,12 +526,14 @@ $("downloadCloudBtn").onclick = async () => {
   
   try {
     toast("جاري جلب البيانات من السحاب...");
-    const response = await fetch(`https://api.myjson.online/v1/records/${code}`);
+    const response = await fetch(`https://jsonblob.com/api/jsonBlob/${code}`, {
+      method: "GET",
+      headers: { "Accept": "application/json" }
+    });
     
-    if (!response.ok) throw new Error("الكود غير صحيح أو منتهي");
+    if (!response.ok) throw new Error("الكود غير موجود");
 
-    const resData = await response.json();
-    const data = resData.jsonData || resData.data || resData;
+    const data = await response.json();
 
     if(data && Array.isArray(data.expenses)){
       L.expenses = data.expenses;
@@ -540,13 +541,13 @@ $("downloadCloudBtn").onclick = async () => {
       L.bud = data.bud || {};
       saveLocal(); refreshMonths(); render();
       $("dlgCloud").classList.remove("open");
-      toast("🎉 تم جلب وتحديث البيانات بنجاح!");
+      toast("🎉 تم جلب البيانات بنجاح!");
     } else {
-      toast("❌ الكود المكتوب لا يحتوي على بيانات مصروفات صحيحة");
+      toast("❌ البيانات المجلوبة غير صالحة");
     }
   } catch(e){
     console.error(e);
-    toast("❌ فشل الجلب: الكود غير صحيح أو لا يوجد اتصال بالإنترنت");
+    toast("❌ فشل الجلب: تحقق من صحة الكود والإنترنت");
   }
 };
 
