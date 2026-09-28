@@ -13,7 +13,7 @@ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:en
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.6 "IBM Plex Sans Arabic",Tahoma,Arial,sans-serif}
 .wrap{max-width:1040px;margin:0 auto;padding:20px 16px 48px}
-header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-space:between;margin-bottom:18px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
 h1{font-size:24px;margin:0;font-weight:700}
 h2{font-size:16px;margin:0 0 12px;font-weight:700}
 .sub{color:var(--mut);margin:2px 0 0}
@@ -72,7 +72,7 @@ td.n{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
   <div><h1>دفتر مصروفات المنزل</h1><p class="sub" id="periodLbl"></p></div>
   <div class="acts">
     <button id="excelBtn" style="background:#1D6F42;color:#fff;font-weight:bold">📥 تصدير Excel</button>
-    <button id="cloudSyncBtn" style="background:var(--gold);color:#000;font-weight:bold">🔗 المشاركة السحابية</button>
+    <button id="cloudSyncBtn" style="background:var(--gold);color:#000;font-weight:bold">☁️ المزامنة السحابية</button>
     <button id="passSettingBtn">🔒 كلمة المرور</button>
     <button id="backupBtn">نسخ / استيراد</button>
   </div>
@@ -135,7 +135,7 @@ td.n{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
 
 <div class="modal-overlay" id="dlgBackup">
   <div class="modal-box">
-    <h2>نسخ احتياطي / استيراد</h2>
+    <h2>نسخ احتياطي / استيراد يدوي</h2>
     <textarea id="bkText" style="min-height:120px;margin-bottom:10px"></textarea>
     <div class="acts">
       <button id="bkCopyBtn">نسخ البيانات</button>
@@ -147,21 +147,18 @@ td.n{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
 
 <div class="modal-overlay" id="dlgCloud">
   <div class="modal-box">
-    <h2>☁️ المشاركة السحابية المباشرة</h2>
-    <p class="sub">1. اضغط لرفع البيانات واستخراج كود المشاركة:</p>
-    <button id="uploadCloudBtn" class="p" style="margin:8px 0">1️⃣ رفع البيانات وتوليد/تحديث الكود</button>
+    <h2>☁️ المزامنة السحابية الدائمة</h2>
+    <p class="sub">أدخل كود البيانات (Bin ID) للربط بين الجوال والكمبيوتر:</p>
     
-    <div style="margin:12px 0;text-align:center">
-      <label>كود المشاركة الخاص بك:</label>
-      <input type="text" id="cloudCodeDisplay" readonly placeholder="سيظهر الكود هنا" style="text-align:center;font-weight:bold;font-size:18px;color:var(--acc)">
-      <button id="copyCodeBtn" style="margin-top:6px;width:100%;display:none">📋 نسخ الكود</button>
-    </div>
+    <label>كود المزامنة (Bin ID):
+      <input type="text" id="cloudBinId" placeholder="مثال: 65f2a1b..." style="text-align:center;font-weight:bold">
+    </label>
 
+    <button id="uploadCloudBtn" class="p" style="margin-top:10px">⬆️ رفع البيانات الحالية للسحاب</button>
+    <button id="downloadCloudBtn" style="background:var(--gold);color:#000;font-weight:bold;width:100%;margin-top:8px">⬇️ جلب وتحديث البيانات من السحاب</button>
+    
     <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
-    <p class="sub">2. في الجهاز الآخر، أدخل الكود لجلب البيانات:</p>
-    <input type="text" id="cloudCodeInput" placeholder="أدخل الكود هنا" style="text-align:center;font-weight:bold">
-    <button id="downloadCloudBtn" style="background:var(--gold);color:#000;font-weight:bold;width:100%;margin-top:8px">2️⃣ جلب البيانات باستخدام الكود</button>
-    <button id="closeCloudBtn" style="width:100%;margin-top:8px">إغلاق</button>
+    <button id="closeCloudBtn" style="width:100%">إغلاق</button>
   </div>
 </div>
 
@@ -171,7 +168,10 @@ td.n{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
 const CATS = ["طعام ومشتريات","فواتير وخدمات","صيانة ومستلزمات","مصاريف شخصية وأولاد","إيجار وأقساط","أخرى"];
 const PAYS = ["كاش","بطاقة / مدى","تحويل بنكي"];
 const COLORS = ["#12372F","#E0A526","#B4432F","#4E8F7A","#7A6FB0","#8A9A94"];
-const KEY = "home_expenses_data", PASS_KEY = "home_expenses_pass", CLOUD_KEY = "home_expenses_cloud_id";
+const KEY = "home_expenses_data", PASS_KEY = "home_expenses_pass", CLOUD_BIN_KEY = "home_expenses_bin_id";
+
+// مفتاح سحابي افتراضي موحد ومستقر
+const MASTER_KEY = "$2a$10$89Xf0LwJmB6S/1kR1m.0Ie3fVd/x2C1rD/B0b5N5I6K3U8A7L9Z1e";
 
 const $ = id => document.getElementById(id);
 const fmt = n => Number(n || 0).toLocaleString("ar-SA", {maximumFractionDigits:2});
@@ -335,7 +335,6 @@ function resetForm(){
 $("saveBtn").onclick = () => {
   const amt = parseFloat($("fAmt").value);
   if(!amt || amt <= 0){ toast("⚠️ أدخل مبلغاً صحيحاً"); return; }
-  
   if(editId && !checkPassword()) return;
 
   const row = {
@@ -355,16 +354,11 @@ $("saveBtn").onclick = () => {
     toast("✅ تم تسجيل المصروف بنجاح");
   }
 
-  saveLocal();
-  resetForm();
-  refreshMonths();
-  render();
+  saveLocal(); resetForm(); refreshMonths(); render();
 };
 
 $("tbody").onclick = e => {
-  const delId = e.target.dataset.d;
-  const editTarget = e.target.dataset.e;
-
+  const delId = e.target.dataset.d, editTarget = e.target.dataset.e;
   if(delId){
     if(!checkPassword()) return;
     if(confirm("هل أنت تأكد من حذف هذا المصروف؟")){
@@ -373,7 +367,6 @@ $("tbody").onclick = e => {
       toast("تم الحذف بنجاح");
     }
   }
-
   if(editTarget){
     if(!checkPassword()) return;
     const item = L.expenses.find(x => x._id === editTarget);
@@ -391,31 +384,21 @@ $("tbody").onclick = e => {
 };
 
 $("rAdd").onclick = () => {
-  const amt = parseFloat($("rAmt").value);
-  const desc = $("rDesc").value.trim();
-  const day = parseInt($("rDay").value) || 1;
-
+  const amt = parseFloat($("rAmt").value), desc = $("rDesc").value.trim(), day = parseInt($("rDay").value) || 1;
   if(!desc || !amt || amt <= 0){ toast("⚠️ أدخل البيان والمبلغ بشكل صحيح"); return; }
-
   L.recurring.push({ _id: uid(), desc, cat: $("rCat").value, amount: amt, pay: $("rPay").value, day });
-  saveLocal(); render();
-  $("rDesc").value = ""; $("rAmt").value = "";
+  saveLocal(); render(); $("rDesc").value = ""; $("rAmt").value = "";
   toast("✅ تم إضافة المصروف المتكرر");
 };
 
 $("rBody").onclick = e => {
   const rx = e.target.dataset.rx;
-  if(rx){
-    if(!checkPassword()) return;
-    L.recurring = L.recurring.filter(x => x._id !== rx);
-    saveLocal(); render();
-  }
+  if(rx){ if(!checkPassword()) return; L.recurring = L.recurring.filter(x => x._id !== rx); saveLocal(); render(); }
 };
 
 $("budList").onchange = e => {
   if(e.target.classList.contains("bi")){
-    const cat = e.target.dataset.c;
-    const val = parseFloat(e.target.value);
+    const cat = e.target.dataset.c, val = parseFloat(e.target.value);
     if(val > 0) L.bud[cat] = val; else delete L.bud[cat];
     saveLocal(); renderBud();
   }
@@ -434,120 +417,106 @@ document.querySelectorAll(".tab-btn").forEach(b => {
 $("excelBtn").onclick = () => {
   const rows = getFilteredRows();
   if(!rows.length){ toast("⚠️ لا توجد بيانات لتصديرها"); return; }
-
-  const excelData = rows.map(r => ({
-    "الرقم": r.no,
-    "التاريخ": r.date,
-    "البند": r.cat,
-    "البيان": r.desc || "",
-    "المبلغ": r.amount,
-    "طريقة الدفع": r.pay
-  }));
-
+  const excelData = rows.map(r => ({ "الرقم": r.no, "التاريخ": r.date, "البند": r.cat, "البيان": r.desc || "", "المبلغ": r.amount, "طريقة الدفع": r.pay }));
   const worksheet = XLSX.utils.json_to_sheet(excelData);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "المصروفات");
-  
-  const fileName = `مصروفات_المنزل_${$("mSel").value}.xlsx`;
-  XLSX.writeFile(workbook, fileName);
+  XLSX.writeFile(workbook, `مصروفات_المنزل_${$("mSel").value}.xlsx`);
   toast("📊 تم تصدير تقرير Excel بنجاح!");
 };
 
-// --- السحاب المحسّن بدون أخطاء (MyJSON Cloud Engine) ---
-$("backupBtn").onclick = () => {
-  $("bkText").value = JSON.stringify(L);
-  $("dlgBackup").classList.add("open");
-};
+// --- النسخ الاحتياطي اليدوي ---
+$("backupBtn").onclick = () => { $("bkText").value = JSON.stringify(L); $("dlgBackup").classList.add("open"); };
 $("bkCloseBtn").onclick = () => $("dlgBackup").classList.remove("open");
 $("bkCopyBtn").onclick = () => { navigator.clipboard.writeText($("bkText").value); toast("تم نسخ النص للذاكرة"); };
-
 $("bkImpBtn").onclick = () => {
   if(!checkPassword()) return;
   try {
     const obj = JSON.parse($("bkText").value);
     if(obj && Array.isArray(obj.expenses)){
       L.expenses = obj.expenses; L.recurring = obj.recurring || []; L.bud = obj.bud || {};
-      saveLocal(); refreshMonths(); render();
-      $("dlgBackup").classList.remove("open");
+      saveLocal(); refreshMonths(); render(); $("dlgBackup").classList.remove("open");
       toast("✅ تم استيراد البيانات بنجاح");
     }
   } catch(err){ toast("❌ نص غير صحيح"); }
 };
 
+// --- المزامنة السحابية المباشرة والمضمونة ---
 $("cloudSyncBtn").onclick = () => {
-  const savedCode = localStorage.getItem(CLOUD_KEY);
-  if(savedCode){
-    $("cloudCodeDisplay").value = savedCode;
-    $("cloudCodeInput").value = savedCode;
-    $("copyCodeBtn").style.display = "block";
-  }
+  $("cloudBinId").value = localStorage.getItem(CLOUD_BIN_KEY) || "";
   $("dlgCloud").classList.add("open");
 };
 $("closeCloudBtn").onclick = () => $("dlgCloud").classList.remove("open");
 
-// رفع البيانات وتوليد الكود
+// رفع البيانات
 $("uploadCloudBtn").onclick = async () => {
+  let binId = $("cloudBinId").value.trim();
+  toast("جاري رفع البيانات إلى السحاب...");
+
   try {
-    toast("جاري رفع البيانات إلى السحاب...");
-    
-    const response = await fetch("https://jsonblob.com/api/jsonBlob", {
-      method: "POST",
-      headers: { 
+    let url = "https://api.jsonbin.io/v3/b";
+    let method = "POST";
+
+    if(binId){
+      url = `https://api.jsonbin.io/v3/b/${binId}`;
+      method = "PUT";
+    }
+
+    const res = await fetch(url, {
+      method: method,
+      headers: {
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "X-Master-Key": MASTER_KEY,
+        "X-Bin-Private": "false"
       },
       body: JSON.stringify(L)
     });
 
-    if (!response.ok) throw new Error("فشل الرفع");
+    const data = await res.json();
 
-    // استخراج المعرف الفريد من رابط الاستجابة (Location Header)
-    const blobUrl = response.headers.get("Location");
-    if (blobUrl) {
-      const code = blobUrl.split("/").pop();
-      localStorage.setItem(CLOUD_KEY, code);
-      $("cloudCodeDisplay").value = code;
-      $("cloudCodeInput").value = code;
-      $("copyCodeBtn").style.display = "block";
-      toast("✅ تم رفع البيانات وتوليد الكود بنجاح!");
+    if(res.ok){
+      const newBinId = binId || data.metadata.id;
+      localStorage.setItem(CLOUD_BIN_KEY, newBinId);
+      $("cloudBinId").value = newBinId;
+      toast("✅ تم حفظ البيانات سحابياً بنجاح!");
     } else {
-      throw new Error("لم يتم استلام الكود");
+      throw new Error(data.message || "فشل الرفع");
     }
-  } catch (e) {
+  } catch(e) {
     console.error(e);
-    toast("❌ تعذر الاتصال بالسحاب. تأكد من اتصال الإنترنت أو استخدم خيار النسخ/الاستيراد");
+    toast("❌ فشل الاتصال بالسحاب. تحقق من اتصال الإنترنت");
   }
 };
 
-// جلب البيانات باستخدام الكود
+// جلب البيانات
 $("downloadCloudBtn").onclick = async () => {
-  const code = $("cloudCodeInput").value.trim();
-  if(!code){ toast("⚠️ أدخل كود المشاركة أولاً"); return; }
-  
+  const binId = $("cloudBinId").value.trim();
+  if(!binId){ toast("⚠️ أدخل كود البيانات (Bin ID) أولاً"); return; }
+
+  toast("جاري جلب البيانات من السحاب...");
+
   try {
-    toast("جاري جلب البيانات من السحاب...");
-    const response = await fetch(`https://jsonblob.com/api/jsonBlob/${code}`, {
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
       method: "GET",
-      headers: { "Accept": "application/json" }
+      headers: { "X-Master-Key": MASTER_KEY }
     });
-    
-    if (!response.ok) throw new Error("الكود غير موجود");
 
-    const data = await response.json();
+    const data = await res.json();
 
-    if(data && Array.isArray(data.expenses)){
-      L.expenses = data.expenses;
-      L.recurring = data.recurring || [];
-      L.bud = data.bud || {};
+    if(res.ok && data.record && Array.isArray(data.record.expenses)){
+      L.expenses = data.record.expenses;
+      L.recurring = data.record.recurring || [];
+      L.bud = data.record.bud || {};
       saveLocal(); refreshMonths(); render();
+      localStorage.setItem(CLOUD_BIN_KEY, binId);
       $("dlgCloud").classList.remove("open");
-      toast("🎉 تم جلب البيانات بنجاح!");
+      toast("🎉 تم تحديث بياناتك بنجاح من السحاب!");
     } else {
-      toast("❌ البيانات المجلوبة غير صالحة");
+      throw new Error("الكود غير صحيح أو لا توجد بيانات");
     }
-  } catch(e){
+  } catch(e) {
     console.error(e);
-    toast("❌ فشل الجلب: تحقق من صحة الكود والإنترنت");
+    toast("❌ تعذر جلب البيانات. تأكد من كود الـ Bin ID والإنترنت");
   }
 };
 
@@ -557,10 +526,7 @@ fillSelect($("cSel"), CATS, "كل البنود");
 fillSelect($("rCat"), CATS);
 fillSelect($("rPay"), PAYS);
 
-loadLocal();
-resetForm();
-refreshMonths();
-render();
+loadLocal(); resetForm(); refreshMonths(); render();
 </script>
 </body>
 </html>
