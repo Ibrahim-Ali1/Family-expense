@@ -214,10 +214,10 @@ function loadLocal(){
   } catch(e){ console.error(e); }
 }
 
-function saveLocal(){
+function saveLocal(skipSync = false){
   try { 
     localStorage.setItem(KEY, JSON.stringify(L));
-    autoUploadCloud(); // رفع تلقائي عند حفظ البيانات محلياً
+    if(!skipSync) autoUploadCloud(); 
   } catch(e){ toast("تعذر الحفظ المحلي"); }
 }
 
@@ -436,19 +436,52 @@ $("bkImpBtn").onclick = () => {
   } catch(err){ toast("❌ نص غير صحيح"); }
 };
 
-// --- المزامنة السحابية المباشرة والمزامنة التلقائية ---
+// --- المزامنة السحابية المباشرة مع دمج البيانات الذكي ---
 $("cloudSyncBtn").onclick = () => {
   $("cloudBinId").value = localStorage.getItem(CLOUD_BIN_KEY) || "";
   $("dlgCloud").classList.add("open");
 };
 $("closeCloudBtn").onclick = () => $("dlgCloud").classList.remove("open");
 
+// دمج البيانات الحالية مع القادمة من السحاب لمنع فقدان أي مصروف
+function mergeData(cloudRecord){
+  if(!cloudRecord) return;
+  
+  // دمج المصروفات بناءً على ID
+  const map = new Map();
+  (cloudRecord.expenses || []).forEach(item => map.set(item._id, item));
+  L.expenses.forEach(item => map.set(item._id, item)); // تحل التعديلات المحلية مكان السحاب
+  L.expenses = Array.from(map.values());
+
+  // دمج المصروفات المتكررة
+  const recMap = new Map();
+  (cloudRecord.recurring || []).forEach(item => recMap.set(item._id, item));
+  L.recurring.forEach(item => recMap.set(item._id, item));
+  L.recurring = Array.from(recMap.values());
+
+  // دمج الميزانية
+  L.bud = { ...(cloudRecord.bud || {}), ...L.bud };
+}
+
 async function autoUploadCloud(){
   const binId = localStorage.getItem(CLOUD_BIN_KEY);
-  if(!binId) return; // إذا لم يُربط بعد بـ Bin ID لا يتم الرفع التلقائي
+  if(!binId) return;
 
   try {
     toast("⚡ جاري المزامنة مع السحاب...");
+    
+    // 1. جلب البيانات الأخيرة من السحاب أولاً
+    const getRes = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+      method: "GET",
+      headers: { "X-Master-Key": MASTER_KEY }
+    });
+    
+    if(getRes.ok){
+      const cloudData = await getRes.json();
+      mergeData(cloudData.record);
+    }
+
+    // 2. رفع القائمة المدمجة إلى السحاب
     const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
       method: "PUT",
       headers: {
@@ -459,7 +492,9 @@ async function autoUploadCloud(){
     });
 
     if(res.ok){
-      toast("✅ تم الحفظ والمزامنة السحابية!");
+      saveLocal(true); // تحديث التخزين المحلي بدون تكرار الرفع
+      refreshMonths(); render();
+      toast("✅ تم الحفظ والمزامنة المتبادلة!");
     }
   } catch(e) {
     console.error(e);
@@ -469,16 +504,23 @@ async function autoUploadCloud(){
 // الرفع اليدوي
 $("uploadCloudBtn").onclick = async () => {
   let binId = $("cloudBinId").value.trim();
-  toast("جاري رفع البيانات إلى السحاب...");
+  toast("جاري المزامنة والرفع إلى السحاب...");
 
   try {
-    let url = "https://api.jsonbin.io/v3/b";
-    let method = "POST";
-
     if(binId){
-      url = `https://api.jsonbin.io/v3/b/${binId}`;
-      method = "PUT";
+      // جلب المدمج أولاً
+      const getRes = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+        method: "GET",
+        headers: { "X-Master-Key": MASTER_KEY }
+      });
+      if(getRes.ok){
+        const cloudData = await getRes.json();
+        mergeData(cloudData.record);
+      }
     }
+
+    let url = binId ? `https://api.jsonbin.io/v3/b/${binId}` : "https://api.jsonbin.io/v3/b";
+    let method = binId ? "PUT" : "POST";
 
     const res = await fetch(url, {
       method: method,
@@ -496,7 +538,9 @@ $("uploadCloudBtn").onclick = async () => {
       const newBinId = binId || data.metadata.id;
       localStorage.setItem(CLOUD_BIN_KEY, newBinId);
       $("cloudBinId").value = newBinId;
-      toast("✅ تم حفظ البيانات وتفعيل المزامنة التلقائية!");
+      saveLocal(true);
+      refreshMonths(); render();
+      toast("✅ تم دمج البيانات وحفظها سحابياً!");
     } else {
       throw new Error(data.message || "فشل الرفع");
     }
@@ -511,7 +555,7 @@ $("downloadCloudBtn").onclick = async () => {
   const binId = $("cloudBinId").value.trim();
   if(!binId){ toast("⚠️ أدخل كود البيانات (Bin ID) أولاً"); return; }
 
-  toast("جاري جلب البيانات من السحاب...");
+  toast("جاري جلب البيانات وتحديثها...");
 
   try {
     const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
@@ -522,17 +566,14 @@ $("downloadCloudBtn").onclick = async () => {
     const data = await res.json();
 
     if(res.ok && data.record && Array.isArray(data.record.expenses)){
-      L.expenses = data.record.expenses;
-      L.recurring = data.record.recurring || [];
-      L.bud = data.record.bud || {};
+      mergeData(data.record);
       
-      // حفظ محلي بدون إعادة الرفع للسحاب لتجنب الدائرة اللانهائية
-      localStorage.setItem(KEY, JSON.stringify(L));
+      saveLocal(true);
       localStorage.setItem(CLOUD_BIN_KEY, binId);
       
       refreshMonths(); render();
       $("dlgCloud").classList.remove("open");
-      toast("🎉 تم تحديث بياناتك بنجاح من السحاب!");
+      toast("🎉 تم جلب وتحديث البيانات دون فقدان أي مصروف!");
     } else {
       throw new Error("الكود غير صحيح أو لا توجد بيانات");
     }
