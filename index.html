@@ -185,7 +185,8 @@ function fillSelect(el, arr, firstOpt){
   el.innerHTML = (firstOpt ? `<option value="">${firstOpt}</option>` : "") + arr.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
 }
 
-let L = { expenses: [], recurring: [], bud: {} };
+// أضفنا deletedIds لتعقب العمليات المحذوفة
+let L = { expenses: [], recurring: [], bud: {}, deletedIds: [] };
 let editId = null;
 
 function checkPassword(){
@@ -210,7 +211,13 @@ $("passSettingBtn").onclick = () => {
 function loadLocal(){
   try {
     const raw = localStorage.getItem(KEY);
-    if(raw){ const parsed = JSON.parse(raw); L.expenses = parsed.expenses || []; L.recurring = parsed.recurring || []; L.bud = parsed.bud || {}; }
+    if(raw){ 
+      const parsed = JSON.parse(raw); 
+      L.expenses = parsed.expenses || []; 
+      L.recurring = parsed.recurring || []; 
+      L.bud = parsed.bud || {}; 
+      L.deletedIds = parsed.deletedIds || [];
+    }
   } catch(e){ console.error(e); }
 }
 
@@ -360,6 +367,8 @@ $("tbody").onclick = e => {
   if(delId){
     if(!checkPassword()) return;
     if(confirm("هل أنت تأكد من حذف هذا المصروف؟")){
+      // تسليط أمر الحذف وتأكيده في سجل المحذوفات
+      if(!L.deletedIds.includes(delId)) L.deletedIds.push(delId);
       L.expenses = L.expenses.filter(x => x._id !== delId);
       saveLocal(); refreshMonths(); render();
     }
@@ -389,7 +398,12 @@ $("rAdd").onclick = () => {
 
 $("rBody").onclick = e => {
   const rx = e.target.dataset.rx;
-  if(rx){ if(!checkPassword()) return; L.recurring = L.recurring.filter(x => x._id !== rx); saveLocal(); render(); }
+  if(rx){ 
+    if(!checkPassword()) return; 
+    if(!L.deletedIds.includes(rx)) L.deletedIds.push(rx);
+    L.recurring = L.recurring.filter(x => x._id !== rx); 
+    saveLocal(); render(); 
+  }
 };
 
 $("budList").onchange = e => {
@@ -430,36 +444,40 @@ $("bkImpBtn").onclick = () => {
   try {
     const obj = JSON.parse($("bkText").value);
     if(obj && Array.isArray(obj.expenses)){
-      L.expenses = obj.expenses; L.recurring = obj.recurring || []; L.bud = obj.bud || {};
+      L.expenses = obj.expenses; L.recurring = obj.recurring || []; L.bud = obj.bud || {}; L.deletedIds = obj.deletedIds || [];
       saveLocal(); refreshMonths(); render(); $("dlgBackup").classList.remove("open");
     }
   } catch(err){ toast("❌ نص غير صحيح"); }
 };
 
-// --- المزامنة السحابية المباشرة مع دمج البيانات الذكي ---
+// --- المزامنة السحابية المباشرة الذكية مع تتبع المحذوفات ---
 $("cloudSyncBtn").onclick = () => {
   $("cloudBinId").value = localStorage.getItem(CLOUD_BIN_KEY) || "";
   $("dlgCloud").classList.add("open");
 };
 $("closeCloudBtn").onclick = () => $("dlgCloud").classList.remove("open");
 
-// دمج البيانات الحالية مع القادمة من السحاب لمنع فقدان أي مصروف
+// دمج البيانات الحالية مع السحاب مع الأخذ بالاعتبار العناصر المحذوفة
 function mergeData(cloudRecord){
   if(!cloudRecord) return;
-  
-  // دمج المصروفات بناءً على ID
+
+  // 1. تجميع قائمة جميع المعرفات المحذوفة من كلا المصدرين
+  const allDeleted = new Set([...L.deletedIds, ...(cloudRecord.deletedIds || [])]);
+  L.deletedIds = Array.from(allDeleted);
+
+  // 2. دمج المصروفات وتصفية المحذوف منها
   const map = new Map();
-  (cloudRecord.expenses || []).forEach(item => map.set(item._id, item));
-  L.expenses.forEach(item => map.set(item._id, item)); // تحل التعديلات المحلية مكان السحاب
+  (cloudRecord.expenses || []).forEach(item => { if(!allDeleted.has(item._id)) map.set(item._id, item); });
+  L.expenses.forEach(item => { if(!allDeleted.has(item._id)) map.set(item._id, item); });
   L.expenses = Array.from(map.values());
 
-  // دمج المصروفات المتكررة
+  // 3. دمج المصروفات المتكررة وتصفية المحذوف منها
   const recMap = new Map();
-  (cloudRecord.recurring || []).forEach(item => recMap.set(item._id, item));
-  L.recurring.forEach(item => recMap.set(item._id, item));
+  (cloudRecord.recurring || []).forEach(item => { if(!allDeleted.has(item._id)) recMap.set(item._id, item); });
+  L.recurring.forEach(item => { if(!allDeleted.has(item._id)) recMap.set(item._id, item); });
   L.recurring = Array.from(recMap.values());
 
-  // دمج الميزانية
+  // 4. دمج الميزانية
   L.bud = { ...(cloudRecord.bud || {}), ...L.bud };
 }
 
@@ -481,7 +499,7 @@ async function autoUploadCloud(){
       mergeData(cloudData.record);
     }
 
-    // 2. رفع القائمة المدمجة إلى السحاب
+    // 2. رفع القائمة المدمجة والخالية من المحذوفات إلى السحاب
     const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
       method: "PUT",
       headers: {
@@ -492,9 +510,9 @@ async function autoUploadCloud(){
     });
 
     if(res.ok){
-      saveLocal(true); // تحديث التخزين المحلي بدون تكرار الرفع
+      saveLocal(true);
       refreshMonths(); render();
-      toast("✅ تم الحفظ والمزامنة المتبادلة!");
+      toast("✅ تم المزامنة وحذف البيانات نهائياً من كافة الأجهزة!");
     }
   } catch(e) {
     console.error(e);
@@ -508,7 +526,6 @@ $("uploadCloudBtn").onclick = async () => {
 
   try {
     if(binId){
-      // جلب المدمج أولاً
       const getRes = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
         method: "GET",
         headers: { "X-Master-Key": MASTER_KEY }
@@ -540,7 +557,7 @@ $("uploadCloudBtn").onclick = async () => {
       $("cloudBinId").value = newBinId;
       saveLocal(true);
       refreshMonths(); render();
-      toast("✅ تم دمج البيانات وحفظها سحابياً!");
+      toast("✅ تم دمج المزامنة مع استبعاد المحذوفات بنجاح!");
     } else {
       throw new Error(data.message || "فشل الرفع");
     }
@@ -573,7 +590,7 @@ $("downloadCloudBtn").onclick = async () => {
       
       refreshMonths(); render();
       $("dlgCloud").classList.remove("open");
-      toast("🎉 تم جلب وتحديث البيانات دون فقدان أي مصروف!");
+      toast("🎉 تم جلب وتحديث البيانات وتطبيق عمليات الحذف!");
     } else {
       throw new Error("الكود غير صحيح أو لا توجد بيانات");
     }
